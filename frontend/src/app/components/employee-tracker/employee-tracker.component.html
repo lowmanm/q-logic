@@ -1,0 +1,109 @@
+<div class="page-header">
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <h1>Employee Tracker</h1>
+    <button class="btn btn-primary" (click)="showCreateForm = !showCreateForm">
+      {{ showCreateForm ? 'Cancel' : 'Add Employee' }}
+    </button>
+  </div>
+</div>
+
+<!-- Create form -->
+@if (showCreateForm) {
+  <div class="card">
+    <h3 style="margin-bottom: 16px;">New Employee</h3>
+    <form [formGroup]="newEmployeeForm" (ngSubmit)="createEmployee()">
+      <div style="display: flex; gap: 16px; margin-bottom: 16px;">
+        <div style="flex: 1;">
+          <label>Name</label>
+          <input type="text" formControlName="name" placeholder="Full name" />
+        </div>
+        <div style="flex: 1;">
+          <label>Email</label>
+          <input type="email" formControlName="email" placeholder="Email address" />
+        </div>
+      </div>
+      <button
+        class="btn btn-primary"
+        type="submit"
+        [disabled]="newEmployeeForm.invalid"
+      >
+        Create Employee
+      </button>
+    </form>
+  </div>
+}
+
+<!-- Employee table -->
+<div class="card">
+  @if (employees.length === 0 && !isLoading) {
+    <p style="color: var(--text-secondary);">No employees registered yet.</p>
+  }
+
+  @if (employees.length > 0) {
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Current State</th>
+          <th>AHT</th>
+          <th>Tasks</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (emp of employees; track emp.id) {
+          <tr>
+            <td><strong>{{ emp.name }}</strong></td>
+            <td>{{ emp.email }}</td>
+            <td>
+              <span [class]="getStateBadgeClass(emp.current_state)">
+                {{ stateLabel(emp.current_state) }}
+              </span>
+            </td>
+            <td>
+              @if (getAHT(emp.id); as metric) {
+                {{ formatSeconds(metric.average_handle_time_seconds) }}
+              } @else {
+                --
+              }
+            </td>
+            <td>
+              @if (getAHT(emp.id); as metric) {
+                {{ metric.task_count }}
+              } @else {
+                0
+              }
+            </td>
+            <td>
+              <div class="state-buttons">
+                @for (state of states; track state) {
+                  <button
+                    class="state-btn"
+                    [class.active]="emp.current_state === state"
+                    [disabled]="emp.current_state === state"
+                    (click)="changeState(emp.id, state)"
+                  >
+                    {{ stateLabel(state) }}
+                  </button>
+                }
+              </div>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>
+
+@if (isLoading) {
+  <div class="card" style="text-align: center;">
+    <p>Loading...</p>
+  </div>
+}
+
+@if (error) {
+  <div class="card" style="border-color: var(--danger); background: #fce8e6; margin-top: 16px;">
+    <p style="color: var(--danger);">{{ error }}</p>
+  </div>
+}
