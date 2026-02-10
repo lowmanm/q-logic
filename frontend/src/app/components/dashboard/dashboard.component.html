@@ -1,0 +1,113 @@
+<div class="page-header">
+  <h1>Performance Dashboard</h1>
+  <p style="color: var(--text-secondary); font-size: 14px;">Auto-refreshes every 10 seconds</p>
+</div>
+
+<!-- Top KPI cards -->
+<div class="kpi-grid">
+  <div class="card kpi-card">
+    <p class="kpi-label">Team AHT</p>
+    <p class="kpi-value">
+      {{ teamAHT ? formatSeconds(teamAHT.average_handle_time_seconds) : '--' }}
+    </p>
+    <p class="kpi-sub">{{ teamAHT?.task_count || 0 }} tasks completed</p>
+  </div>
+
+  @if (agentStates) {
+    <div class="card kpi-card">
+      <p class="kpi-label">Available</p>
+      <p class="kpi-value" style="color: var(--success);">{{ agentStates.available }}</p>
+      <p class="kpi-sub">of {{ agentStates.total }} agents</p>
+    </div>
+    <div class="card kpi-card">
+      <p class="kpi-label">In Task</p>
+      <p class="kpi-value" style="color: var(--primary);">{{ agentStates.in_task }}</p>
+      <p class="kpi-sub">of {{ agentStates.total }} agents</p>
+    </div>
+    <div class="card kpi-card">
+      <p class="kpi-label">On Break</p>
+      <p class="kpi-value" style="color: #b06000;">{{ agentStates.break }}</p>
+      <p class="kpi-sub">of {{ agentStates.total }} agents</p>
+    </div>
+  }
+</div>
+
+<!-- Queue Health -->
+@if (queueStats.length > 0) {
+  <div class="card" style="margin-top: 8px;">
+    <h2 style="margin-bottom: 16px;">Queue Health</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Project</th>
+          <th>Pending</th>
+          <th>Assigned</th>
+          <th>Completed</th>
+          <th>Skipped</th>
+          <th>Progress</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (q of queueStats; track q.source_id) {
+          <tr>
+            <td><strong>{{ q.project_name }}</strong></td>
+            <td><span class="badge badge-available">{{ q.pending }}</span></td>
+            <td><span class="badge badge-in-task">{{ q.assigned }}</span></td>
+            <td><span class="badge badge-wrap-up">{{ q.completed }}</span></td>
+            <td>{{ q.skipped }}</td>
+            <td>
+              <div class="progress-bar">
+                <div
+                  class="progress-fill"
+                  [style.width.%]="queueCompletionPct(q)"
+                ></div>
+              </div>
+              <span style="font-size: 12px; color: var(--text-secondary);">
+                {{ queueCompletionPct(q) }}%
+              </span>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+<!-- Agent Leaderboard -->
+@if (leaderboard.length > 0) {
+  <div class="card" style="margin-top: 8px;">
+    <h2 style="margin-bottom: 16px;">Agent Leaderboard</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Agent</th>
+          <th>State</th>
+          <th>Tasks</th>
+          <th>Avg Handle Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (entry of leaderboard; track entry.employee_id; let i = $index) {
+          <tr>
+            <td>{{ i + 1 }}</td>
+            <td><strong>{{ entry.name }}</strong></td>
+            <td>
+              <span [class]="stateBadgeClass(entry.current_state)">
+                {{ stateLabel(entry.current_state) }}
+              </span>
+            </td>
+            <td>{{ entry.task_count }}</td>
+            <td>{{ formatSeconds(entry.average_handle_time_seconds) }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (isLoading) {
+  <div class="card" style="text-align: center; margin-top: 16px;">
+    <p>Loading metrics...</p>
+  </div>
+}

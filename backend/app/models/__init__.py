@@ -1,5 +1,6 @@
 from app.models.registry import SourceMetadata, ColumnMetadata
 from app.models.employee import Employee, EmployeeStateLog, TaskLog
+from app.models.queue import RecordQueue
 
 __all__ = [
     "SourceMetadata",
@@ -7,4 +8,5 @@ __all__ = [
     "Employee",
     "EmployeeStateLog",
     "TaskLog",
+    "RecordQueue",
 ]

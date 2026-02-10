@@ -32,3 +32,10 @@ class ProvisionResponse(BaseModel):
     table_name: str
     source_id: str
     column_count: int
+
+
+class DataLoadResponse(BaseModel):
+    source_id: str
+    rows_loaded: int
+    rows_failed: int
+    errors: list[str]

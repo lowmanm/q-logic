@@ -37,3 +37,18 @@ code {
   padding: 2px 6px;
   border-radius: 4px;
 }
+
+.queue-bar {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.screen-pop-bar {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg);
+  border-radius: var(--radius);
+  margin-top: 8px;
+}

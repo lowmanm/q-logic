@@ -1,4 +1,6 @@
-"""Routes for CSV schema inference and table provisioning."""
+"""Routes for CSV schema inference, table provisioning, and data loading."""
+
+from uuid import UUID
 
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,9 +11,12 @@ from app.schemas.schema_inference import (
     SchemaInferenceResponse,
     ProvisionRequest,
     ProvisionResponse,
+    DataLoadResponse,
 )
 from app.services.inference import infer_schema
 from app.services.provisioning import provision_table
+from app.services.data_loader import load_csv
+from app.services.workspace import get_project_info
 
 router = APIRouter(prefix="/schema", tags=["Schema"])
 
@@ -68,4 +73,37 @@ async def provision_project_table(
         table_name=source.table_name,
         source_id=str(source.id),
         column_count=len(source.columns),
+    )
+
+
+@router.post("/{source_id}/load", response_model=DataLoadResponse)
+async def load_csv_data(
+    source_id: UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Load CSV data into an already-provisioned project table.
+
+    The CSV is streamed and inserted in batches of 500 rows.
+    Rows that fail type conversion are skipped and reported.
+    """
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Only CSV files are accepted.")
+
+    source = await get_project_info(db, source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    content = await file.read()
+
+    try:
+        result = await load_csv(db, source, content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Data load failed: {e}")
+
+    return DataLoadResponse(
+        source_id=str(source_id),
+        rows_loaded=result.rows_loaded,
+        rows_failed=result.rows_failed,
+        errors=result.errors,
     )

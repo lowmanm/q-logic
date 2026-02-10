@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 import { ApiService } from '../../services/api.service';
-import { ProjectInfo, TaskRecord } from '../../models/workspace.models';
+import { ProjectInfo, NextTaskResponse, QueueStatsResponse } from '../../models/workspace.models';
+import { Employee } from '../../models/employee.models';
 
 @Component({
   selector: 'app-agent-workspace',
@@ -13,61 +14,110 @@ import { ProjectInfo, TaskRecord } from '../../models/workspace.models';
   styleUrl: './agent-workspace.component.css',
 })
 export class AgentWorkspaceComponent implements OnInit {
+  // Setup
   projects: ProjectInfo[] = [];
+  employees: Employee[] = [];
   selectedProject: ProjectInfo | null = null;
-  records: TaskRecord[] = [];
-  selectedRecord: TaskRecord | null = null;
+  selectedEmployeeId = '';
+
+  // Queue state
+  queueStats: QueueStatsResponse | null = null;
+  currentTask: NextTaskResponse | null = null;
+
+  // UI state
   isLoading = false;
   error = '';
+  taskCompleted = false;
 
   constructor(private api: ApiService) {}
 
   ngOnInit(): void {
-    this.loadProjects();
-  }
-
-  loadProjects(): void {
-    this.isLoading = true;
     this.api.getProjects().subscribe({
-      next: (projects) => {
-        this.projects = projects;
-        this.isLoading = false;
-      },
-      error: () => {
-        this.error = 'Failed to load projects.';
-        this.isLoading = false;
-      },
+      next: (p) => (this.projects = p),
+      error: () => (this.error = 'Failed to load projects.'),
+    });
+    this.api.getEmployees().subscribe({
+      next: (e) => (this.employees = e),
+      error: () => (this.error = 'Failed to load employees.'),
     });
   }
 
   selectProject(project: ProjectInfo): void {
     this.selectedProject = project;
-    this.selectedRecord = null;
-    this.loadRecords();
+    this.currentTask = null;
+    this.taskCompleted = false;
+    this.refreshQueueStats();
   }
 
-  loadRecords(): void {
+  refreshQueueStats(): void {
     if (!this.selectedProject) return;
+    this.api.getQueueStats(this.selectedProject.source_id).subscribe({
+      next: (stats) => (this.queueStats = stats),
+    });
+  }
+
+  getNextTask(): void {
+    if (!this.selectedProject || !this.selectedEmployeeId) return;
+
     this.isLoading = true;
-    this.api.getRecords(this.selectedProject.source_id).subscribe({
-      next: (records) => {
-        this.records = records;
+    this.error = '';
+    this.taskCompleted = false;
+
+    this.api
+      .getNextTask(this.selectedProject.source_id, this.selectedEmployeeId)
+      .subscribe({
+        next: (task) => {
+          this.currentTask = task;
+          this.isLoading = false;
+          this.refreshQueueStats();
+        },
+        error: (err) => {
+          this.error = err.error?.detail || 'No more records in queue.';
+          this.currentTask = null;
+          this.isLoading = false;
+        },
+      });
+  }
+
+  completeTask(): void {
+    if (!this.currentTask) return;
+    this.isLoading = true;
+
+    this.api.completeQueueItem(this.currentTask.queue_id).subscribe({
+      next: () => {
+        this.taskCompleted = true;
         this.isLoading = false;
+        this.refreshQueueStats();
       },
-      error: () => {
-        this.error = 'Failed to load records.';
+      error: (err) => {
+        this.error = err.error?.detail || 'Failed to complete task.';
         this.isLoading = false;
       },
     });
   }
 
-  selectRecord(record: TaskRecord): void {
-    this.selectedRecord = record;
+  skipTask(): void {
+    if (!this.currentTask) return;
+    this.isLoading = true;
+
+    this.api.skipQueueItem(this.currentTask.queue_id).subscribe({
+      next: () => {
+        this.currentTask = null;
+        this.isLoading = false;
+        this.refreshQueueStats();
+        // Auto-pull next
+        this.getNextTask();
+      },
+      error: (err) => {
+        this.error = err.error?.detail || 'Failed to skip task.';
+        this.isLoading = false;
+      },
+    });
   }
 
   openScreenPop(): void {
-    if (this.selectedRecord?.screen_pop_url) {
-      window.open(this.selectedRecord.screen_pop_url, '_blank');
+    if (this.currentTask?.screen_pop_url) {
+      window.open(this.currentTask.screen_pop_url, '_blank');
     }
   }
 
@@ -81,7 +131,9 @@ export class AgentWorkspaceComponent implements OnInit {
 
   backToProjects(): void {
     this.selectedProject = null;
-    this.records = [];
-    this.selectedRecord = null;
+    this.currentTask = null;
+    this.queueStats = null;
+    this.taskCompleted = false;
+    this.error = '';
   }
 }

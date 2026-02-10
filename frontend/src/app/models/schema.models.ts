@@ -32,3 +32,10 @@ export interface ProvisionResponse {
   source_id: string;
   column_count: number;
 }
+
+export interface DataLoadResponse {
+  source_id: string;
+  rows_loaded: number;
+  rows_failed: number;
+  errors: string[];
+}
