@@ -1,0 +1,140 @@
+<div class="page-header">
+  <h1>Schema Designer</h1>
+</div>
+
+<!-- Step 1: Upload -->
+@if (step === 'upload') {
+  <div class="card">
+    <div class="upload-zone" (click)="fileInput.click()">
+      <p><strong>Click to upload a CSV file</strong></p>
+      <p style="color: var(--text-secondary); font-size: 14px;">
+        The system will analyze the first 100 rows to infer column types.
+      </p>
+      <input
+        #fileInput
+        type="file"
+        accept=".csv"
+        (change)="onFileSelected($event)"
+        hidden
+      />
+    </div>
+  </div>
+}
+
+<!-- Step 2: Design / Mapping Grid -->
+@if (step === 'design') {
+  <div class="card">
+    <p style="margin-bottom: 16px; color: var(--text-secondary);">
+      Analyzed <strong>{{ rowCount }}</strong> rows from
+      <strong>{{ filename }}</strong>
+    </p>
+
+    <form [formGroup]="projectForm">
+      <div style="display: flex; gap: 16px; margin-bottom: 24px;">
+        <div style="flex: 1;">
+          <label><strong>Project Name</strong></label>
+          <input type="text" formControlName="projectName" placeholder="e.g. Customer Outreach Q1" />
+        </div>
+        <div style="flex: 1;">
+          <label><strong>Screen Pop URL Template</strong></label>
+          <input
+            type="text"
+            formControlName="screenPopUrlTemplate"
+            placeholder="e.g. https://crm.com/contact?id={unique_id}"
+          />
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Original Column</th>
+            <th>Display Name</th>
+            <th>Data Type</th>
+            <th>Unique ID</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (col of columnControls; track col; let i = $index) {
+            <tr [formGroup]="col">
+              <td>
+                <code>{{ col.get('originalName')!.value }}</code>
+              </td>
+              <td>
+                <input type="text" formControlName="displayName" />
+              </td>
+              <td>
+                <select formControlName="dataType">
+                  @for (dt of dataTypes; track dt) {
+                    <option [value]="dt">{{ dt }}</option>
+                  }
+                </select>
+              </td>
+              <td style="text-align: center;">
+                <label class="toggle-switch">
+                  <input type="checkbox" formControlName="isUniqueId" />
+                  <span class="slider"></span>
+                </label>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      <div style="margin-top: 24px; display: flex; gap: 12px;">
+        <button
+          class="btn btn-primary"
+          (click)="provision()"
+          [disabled]="projectForm.invalid || isLoading"
+        >
+          {{ isLoading ? 'Provisioning...' : 'Provision Table' }}
+        </button>
+        <button class="btn" style="background: var(--bg);" (click)="reset()">
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+}
+
+<!-- Step 3: Success -->
+@if (step === 'done' && provisionResult) {
+  <div class="card">
+    <h2 style="color: var(--success); margin-bottom: 16px;">Table Provisioned</h2>
+    <table>
+      <tr>
+        <th>Project</th>
+        <td>{{ provisionResult.project_name }}</td>
+      </tr>
+      <tr>
+        <th>Physical Table</th>
+        <td><code>{{ provisionResult.table_name }}</code></td>
+      </tr>
+      <tr>
+        <th>Source ID</th>
+        <td><code>{{ provisionResult.source_id }}</code></td>
+      </tr>
+      <tr>
+        <th>Columns</th>
+        <td>{{ provisionResult.column_count }}</td>
+      </tr>
+    </table>
+    <button class="btn btn-primary" style="margin-top: 16px;" (click)="reset()">
+      Design Another
+    </button>
+  </div>
+}
+
+<!-- Error banner -->
+@if (error) {
+  <div class="card" style="border-color: var(--danger); background: #fce8e6; margin-top: 16px;">
+    <p style="color: var(--danger);">{{ error }}</p>
+  </div>
+}
+
+<!-- Loading overlay -->
+@if (isLoading && step === 'upload') {
+  <div class="card" style="text-align: center; margin-top: 16px;">
+    <p>Analyzing CSV...</p>
+  </div>
+}

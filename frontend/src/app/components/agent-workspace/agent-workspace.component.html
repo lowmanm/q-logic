@@ -1,0 +1,121 @@
+<div class="page-header">
+  <h1>Agent Workspace</h1>
+</div>
+
+<!-- Project selector -->
+@if (!selectedProject) {
+  <div class="card">
+    <h2 style="margin-bottom: 16px;">Select a Project</h2>
+    @if (projects.length === 0 && !isLoading) {
+      <p style="color: var(--text-secondary);">
+        No projects provisioned yet. Go to Schema Designer to create one.
+      </p>
+    }
+    <div class="project-grid">
+      @for (project of projects; track project.source_id) {
+        <div class="project-card" (click)="selectProject(project)">
+          <h3>{{ project.project_name }}</h3>
+          <p>{{ project.columns.length }} columns</p>
+          <code>{{ project.table_name }}</code>
+        </div>
+      }
+    </div>
+  </div>
+}
+
+<!-- Record grid -->
+@if (selectedProject && !selectedRecord) {
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <div>
+        <h2>{{ selectedProject.project_name }}</h2>
+        <p style="color: var(--text-secondary); font-size: 14px;">
+          Showing records from <code>{{ selectedProject.table_name }}</code>
+        </p>
+      </div>
+      <button class="btn" style="background: var(--bg);" (click)="backToProjects()">
+        Back to Projects
+      </button>
+    </div>
+
+    @if (records.length === 0 && !isLoading) {
+      <p style="color: var(--text-secondary);">No records in this table yet.</p>
+    }
+
+    @if (records.length > 0) {
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              @for (col of getDisplayColumns(); track col.physical) {
+                <th>{{ col.display }}</th>
+              }
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (rec of records; track rec.record['id']) {
+              <tr>
+                @for (col of getDisplayColumns(); track col.physical) {
+                  <td>{{ rec.record[col.physical] }}</td>
+                }
+                <td>
+                  <button class="btn btn-primary" style="padding: 4px 12px; font-size: 13px;" (click)="selectRecord(rec)">
+                    Open
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+}
+
+<!-- Record detail with screen pop -->
+@if (selectedRecord) {
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <h2>Record Detail</h2>
+      <button class="btn" style="background: var(--bg);" (click)="selectedRecord = null">
+        Back to List
+      </button>
+    </div>
+
+    <table>
+      @for (col of getDisplayColumns(); track col.physical) {
+        <tr>
+          <th style="width: 200px;">{{ col.display }}</th>
+          <td>{{ selectedRecord.record[col.physical] }}</td>
+        </tr>
+      }
+    </table>
+
+    @if (selectedRecord.screen_pop_url) {
+      <div style="margin-top: 24px; padding: 16px; background: var(--bg); border-radius: var(--radius);">
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">Screen Pop URL</p>
+        <code>{{ selectedRecord.screen_pop_url }}</code>
+        <button
+          class="btn btn-success"
+          style="margin-left: 12px; padding: 4px 16px;"
+          (click)="openScreenPop()"
+        >
+          Open in CRM
+        </button>
+      </div>
+    }
+  </div>
+}
+
+@if (isLoading) {
+  <div class="card" style="text-align: center;">
+    <p>Loading...</p>
+  </div>
+}
+
+@if (error) {
+  <div class="card" style="border-color: var(--danger); background: #fce8e6;">
+    <p style="color: var(--danger);">{{ error }}</p>
+  </div>
+}
