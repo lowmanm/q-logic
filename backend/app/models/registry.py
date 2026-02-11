@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Text, func
+from sqlalchemy import Index, String, Boolean, DateTime, ForeignKey, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,6 +35,9 @@ class ColumnMetadata(Base):
     """Stores display name aliases and metadata for each column in a dynamic table."""
 
     __tablename__ = "column_metadata"
+    __table_args__ = (
+        Index("ix_column_metadata_source_id", "source_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4

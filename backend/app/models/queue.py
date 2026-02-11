@@ -3,12 +3,12 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
-    String,
     BigInteger,
     Integer,
     DateTime,
     ForeignKey,
     Enum,
+    Index,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -28,6 +28,11 @@ class RecordQueue(Base):
     """Work queue — one row per record that needs to be worked by an agent."""
 
     __tablename__ = "record_queue"
+    __table_args__ = (
+        Index("ix_record_queue_source_status", "source_id", "status"),
+        Index("ix_record_queue_assigned_to", "assigned_to"),
+        Index("ix_record_queue_source_record", "source_id", "record_id", unique=True),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4

@@ -9,9 +9,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.models.registry import SourceMetadata, ColumnMetadata
-
-BATCH_SIZE = 500
 
 # Conversion functions keyed by the data type stored in column_metadata.
 # Each returns a Python value suitable for asyncpg parameterized queries.
@@ -189,7 +188,7 @@ async def load_csv(
 
         batch.append(params)
 
-        if len(batch) >= BATCH_SIZE:
+        if len(batch) >= settings.DATA_LOAD_BATCH_SIZE:
             await _flush_batch(db, insert_sql, batch)
             result.rows_loaded += len(batch)
             batch = []

@@ -1,10 +1,10 @@
 import uuid
+import enum
 from datetime import datetime
 
-from sqlalchemy import String, DateTime, ForeignKey, Enum, func
+from sqlalchemy import Index, String, DateTime, ForeignKey, Enum, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-import enum
 
 from app.core.database import Base
 
@@ -18,6 +18,9 @@ class EmployeeState(str, enum.Enum):
 
 class Employee(Base):
     __tablename__ = "employees"
+    __table_args__ = (
+        Index("ix_employees_current_state", "current_state"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -41,6 +44,9 @@ class Employee(Base):
 
 class EmployeeStateLog(Base):
     __tablename__ = "employee_state_logs"
+    __table_args__ = (
+        Index("ix_employee_state_logs_employee_id", "employee_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -63,6 +69,11 @@ class TaskLog(Base):
     """Tracks individual task assignments against dynamic project tables."""
 
     __tablename__ = "task_logs"
+    __table_args__ = (
+        Index("ix_task_logs_employee_id", "employee_id"),
+        Index("ix_task_logs_source_id", "source_id"),
+        Index("ix_task_logs_completed_at", "completed_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
