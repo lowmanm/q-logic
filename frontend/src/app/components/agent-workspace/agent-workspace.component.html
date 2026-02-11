@@ -2,7 +2,7 @@
   <h1>Agent Workspace</h1>
 </div>
 
-<!-- Project selector -->
+<!-- Step 1: Select Project + Agent Identity -->
 @if (!selectedProject) {
   <div class="card">
     <h2 style="margin-bottom: 16px;">Select a Project</h2>
@@ -23,99 +23,130 @@
   </div>
 }
 
-<!-- Record grid -->
-@if (selectedProject && !selectedRecord) {
+<!-- Step 2: Agent Task Panel -->
+@if (selectedProject && !currentTask && !taskCompleted) {
   <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
       <div>
         <h2>{{ selectedProject.project_name }}</h2>
-        <p style="color: var(--text-secondary); font-size: 14px;">
-          Showing records from <code>{{ selectedProject.table_name }}</code>
-        </p>
+        @if (queueStats) {
+          <div class="queue-bar">
+            <span class="badge badge-available">{{ queueStats.pending }} pending</span>
+            <span class="badge badge-in-task">{{ queueStats.assigned }} assigned</span>
+            <span class="badge badge-wrap-up">{{ queueStats.completed }} completed</span>
+            @if (queueStats.skipped > 0) {
+              <span class="badge" style="background: #f1f3f4; color: var(--text-secondary);">{{ queueStats.skipped }} skipped</span>
+            }
+          </div>
+        }
       </div>
       <button class="btn" style="background: var(--bg);" (click)="backToProjects()">
-        Back to Projects
+        Back
       </button>
     </div>
 
-    @if (records.length === 0 && !isLoading) {
-      <p style="color: var(--text-secondary);">No records in this table yet.</p>
-    }
-
-    @if (records.length > 0) {
-      <div style="overflow-x: auto;">
-        <table>
-          <thead>
-            <tr>
-              @for (col of getDisplayColumns(); track col.physical) {
-                <th>{{ col.display }}</th>
-              }
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (rec of records; track rec.record['id']) {
-              <tr>
-                @for (col of getDisplayColumns(); track col.physical) {
-                  <td>{{ rec.record[col.physical] }}</td>
-                }
-                <td>
-                  <button class="btn btn-primary" style="padding: 4px 12px; font-size: 13px;" (click)="selectRecord(rec)">
-                    Open
-                  </button>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
+    <div style="display: flex; gap: 16px; align-items: flex-end;">
+      <div style="flex: 1;">
+        <label style="display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">
+          Working as
+        </label>
+        <select [(ngModel)]="selectedEmployeeId" style="width: 100%;">
+          <option value="" disabled>Select your name...</option>
+          @for (emp of employees; track emp.id) {
+            <option [value]="emp.id">{{ emp.name }}</option>
+          }
+        </select>
       </div>
-    }
+      <button
+        class="btn btn-primary"
+        style="height: 38px;"
+        (click)="getNextTask()"
+        [disabled]="!selectedEmployeeId || isLoading"
+      >
+        {{ isLoading ? 'Pulling...' : 'Get Next Task' }}
+      </button>
+    </div>
   </div>
 }
 
-<!-- Record detail with screen pop -->
-@if (selectedRecord) {
+<!-- Step 3: Working a Task -->
+@if (currentTask && !taskCompleted) {
   <div class="card">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-      <h2>Record Detail</h2>
-      <button class="btn" style="background: var(--bg);" (click)="selectedRecord = null">
-        Back to List
-      </button>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <h2>Current Task</h2>
+      <span style="font-size: 13px; color: var(--text-secondary);">
+        {{ currentTask.queue_depth }} remaining in queue
+      </span>
     </div>
 
-    <table>
-      @for (col of getDisplayColumns(); track col.physical) {
-        <tr>
-          <th style="width: 200px;">{{ col.display }}</th>
-          <td>{{ selectedRecord.record[col.physical] }}</td>
-        </tr>
-      }
-    </table>
-
-    @if (selectedRecord.screen_pop_url) {
-      <div style="margin-top: 24px; padding: 16px; background: var(--bg); border-radius: var(--radius);">
-        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">Screen Pop URL</p>
-        <code>{{ selectedRecord.screen_pop_url }}</code>
-        <button
-          class="btn btn-success"
-          style="margin-left: 12px; padding: 4px 16px;"
-          (click)="openScreenPop()"
-        >
+    @if (currentTask.screen_pop_url) {
+      <div class="screen-pop-bar">
+        <code>{{ currentTask.screen_pop_url }}</code>
+        <button class="btn btn-success" style="padding: 4px 16px; margin-left: 12px;" (click)="openScreenPop()">
           Open in CRM
         </button>
       </div>
     }
+
+    <table style="margin-top: 16px;">
+      @for (col of getDisplayColumns(); track col.physical) {
+        <tr>
+          <th style="width: 200px;">{{ col.display }}</th>
+          <td>{{ currentTask.record[col.physical] }}</td>
+        </tr>
+      }
+    </table>
+
+    <div style="margin-top: 24px; display: flex; gap: 12px;">
+      <button
+        class="btn btn-primary"
+        (click)="completeTask()"
+        [disabled]="isLoading"
+      >
+        Complete
+      </button>
+      <button
+        class="btn btn-warning"
+        (click)="skipTask()"
+        [disabled]="isLoading"
+      >
+        Skip
+      </button>
+      <button class="btn" style="background: var(--bg);" (click)="backToProjects()">
+        Exit Queue
+      </button>
+    </div>
   </div>
 }
 
-@if (isLoading) {
+<!-- Step 4: Task completed — pull next -->
+@if (taskCompleted) {
+  <div class="card" style="text-align: center;">
+    <h2 style="color: var(--success); margin-bottom: 16px;">Task Completed</h2>
+    @if (queueStats) {
+      <p style="color: var(--text-secondary); margin-bottom: 16px;">
+        {{ queueStats.pending }} records remaining in queue
+      </p>
+    }
+    <div style="display: flex; gap: 12px; justify-content: center;">
+      <button class="btn btn-primary" (click)="getNextTask()" [disabled]="isLoading">
+        {{ isLoading ? 'Pulling...' : 'Get Next Task' }}
+      </button>
+      <button class="btn" style="background: var(--bg);" (click)="backToProjects()">
+        Exit Queue
+      </button>
+    </div>
+  </div>
+}
+
+@if (isLoading && !selectedProject) {
   <div class="card" style="text-align: center;">
     <p>Loading...</p>
   </div>
 }
 
 @if (error) {
-  <div class="card" style="border-color: var(--danger); background: #fce8e6;">
+  <div class="card" style="border-color: var(--danger); background: #fce8e6; margin-top: 16px;">
     <p style="color: var(--danger);">{{ error }}</p>
   </div>
 }

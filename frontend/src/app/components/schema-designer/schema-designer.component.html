@@ -25,7 +25,7 @@
 @if (step === 'design') {
   <div class="card">
     <p style="margin-bottom: 16px; color: var(--text-secondary);">
-      Analyzed <strong>{{ rowCount }}</strong> rows from
+      Analyzed <strong>{{ rowCount }}</strong> sample rows from
       <strong>{{ filename }}</strong>
     </p>
 
@@ -97,8 +97,8 @@
   </div>
 }
 
-<!-- Step 3: Success -->
-@if (step === 'done' && provisionResult) {
+<!-- Step 3: Table Provisioned — Load Data -->
+@if (step === 'provisioned' && provisionResult) {
   <div class="card">
     <h2 style="color: var(--success); margin-bottom: 16px;">Table Provisioned</h2>
     <table>
@@ -111,17 +111,78 @@
         <td><code>{{ provisionResult.table_name }}</code></td>
       </tr>
       <tr>
-        <th>Source ID</th>
-        <td><code>{{ provisionResult.source_id }}</code></td>
-      </tr>
-      <tr>
         <th>Columns</th>
         <td>{{ provisionResult.column_count }}</td>
       </tr>
     </table>
-    <button class="btn btn-primary" style="margin-top: 16px;" (click)="reset()">
-      Design Another
-    </button>
+
+    <div style="margin-top: 24px; padding: 20px; background: var(--bg); border-radius: var(--radius);">
+      <h3 style="margin-bottom: 8px;">Load Data</h3>
+      <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">
+        Upload your full production CSV. All rows will be loaded (schema inference used only a sample).
+      </p>
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <button
+          class="btn btn-primary"
+          (click)="loadData()"
+          [disabled]="isLoading || !originalFile"
+        >
+          {{ isLoading ? 'Loading...' : 'Load Same File (' + filename + ')' }}
+        </button>
+        <span style="color: var(--text-secondary); font-size: 13px;">or</span>
+        <button class="btn" style="background: white; border: 1px solid var(--border);" (click)="altFileInput.click()">
+          Choose Different File
+        </button>
+        <input
+          #altFileInput
+          type="file"
+          accept=".csv"
+          (change)="loadData($event)"
+          hidden
+        />
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Step 4: Data Loaded — Done -->
+@if (step === 'loaded' && loadResult) {
+  <div class="card">
+    <h2 style="color: var(--success); margin-bottom: 16px;">Data Loaded</h2>
+    <table>
+      <tr>
+        <th>Project</th>
+        <td>{{ provisionResult?.project_name }}</td>
+      </tr>
+      <tr>
+        <th>Rows Loaded</th>
+        <td><strong>{{ loadResult.rows_loaded }}</strong></td>
+      </tr>
+      @if (loadResult.rows_failed > 0) {
+        <tr>
+          <th>Rows Failed</th>
+          <td style="color: var(--danger);">{{ loadResult.rows_failed }}</td>
+        </tr>
+      }
+    </table>
+
+    @if (loadResult.errors.length > 0) {
+      <div style="margin-top: 16px; padding: 12px; background: #fef7e0; border-radius: var(--radius); max-height: 200px; overflow-y: auto;">
+        <p style="font-weight: 600; font-size: 13px; margin-bottom: 8px;">Conversion Warnings</p>
+        @for (err of loadResult.errors; track err) {
+          <p style="font-size: 12px; color: var(--text-secondary);">{{ err }}</p>
+        }
+      </div>
+    }
+
+    <div style="margin-top: 24px; display: flex; gap: 12px;">
+      <button class="btn btn-success" (click)="enqueueNow()" [disabled]="isLoading">
+        {{ isLoading ? 'Enqueuing...' : 'Enqueue for Agents' }}
+      </button>
+      <button class="btn btn-primary" (click)="reset()">
+        Design Another
+      </button>
+    </div>
   </div>
 }
 
@@ -135,6 +196,6 @@
 <!-- Loading overlay -->
 @if (isLoading && step === 'upload') {
   <div class="card" style="text-align: center; margin-top: 16px;">
-    <p>Analyzing CSV...</p>
+    <p>Analyzing CSV (sampling first 100 rows)...</p>
   </div>
 }

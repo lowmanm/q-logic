@@ -5,6 +5,10 @@ __pycache__/
 .venv/
 venv/
 .env
+*.tfvars
+*.tfstate*
+.terraform/
+tf-key.json
 
 # Node
 node_modules/

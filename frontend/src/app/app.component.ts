@@ -8,6 +8,7 @@ import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
   template: `
     <nav>
       <ul>
+        <li><a routerLink="/dashboard" routerLinkActive="active">Dashboard</a></li>
         <li><a routerLink="/designer" routerLinkActive="active">Schema Designer</a></li>
         <li><a routerLink="/workspace" routerLinkActive="active">Agent Workspace</a></li>
         <li><a routerLink="/employees" routerLinkActive="active">Employee Tracker</a></li>

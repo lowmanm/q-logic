@@ -2,31 +2,49 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: qlogic
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-qlogic}
     ports:
-      - "5432:5432"
+      - "${DB_EXPOSE_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
       interval: 5s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      target: ${BUILD_TARGET:-development}
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/qlogic
-      DATABASE_URL_SYNC: postgresql+psycopg2://postgres:postgres@db:5432/qlogic
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-qlogic}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_SSL_MODE: disable
+      JWT_SECRET: ${JWT_SECRET:-local-dev-secret-not-for-production}
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - ./backend:/app
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
 
   frontend:
     build: ./frontend
@@ -34,6 +52,11 @@ services:
       - "4200:80"
     depends_on:
       - backend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
 volumes:
   pgdata:

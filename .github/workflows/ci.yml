@@ -1,0 +1,195 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: us-central1-docker.pkg.dev
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  BACKEND_IMAGE: us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/qlogic/backend
+  FRONTEND_IMAGE: us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/qlogic/frontend
+
+jobs:
+  # ── Backend: Lint & Test ────────────────────────────────────
+  backend-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: qlogic_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run linter
+        run: |
+          pip install ruff
+          ruff check .
+
+      - name: Run tests
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: qlogic_test
+          DB_USER: test
+          DB_PASSWORD: test
+          DB_SSL_MODE: disable
+          JWT_SECRET: ci-test-secret
+          ENVIRONMENT: testing
+        run: pytest -v --tb=short
+
+  # ── Frontend: Lint & Build ─────────────────────────────────
+  frontend-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Build
+        run: npm run build
+
+  # ── Docker Build & Push (main/develop only) ────────────────
+  docker-push:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    needs: [backend-test, frontend-build]
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write  # for Workload Identity Federation
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      - name: Set image tag
+        id: tag
+        run: |
+          SHA="${GITHUB_SHA::8}"
+          BRANCH="${GITHUB_REF_NAME}"
+          echo "tag=${BRANCH}-${SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push backend
+        run: |
+          docker build \
+            --target production \
+            -t ${{ env.BACKEND_IMAGE }}:${{ steps.tag.outputs.tag }} \
+            -t ${{ env.BACKEND_IMAGE }}:latest \
+            ./backend
+          docker push ${{ env.BACKEND_IMAGE }} --all-tags
+
+      - name: Build & push frontend
+        run: |
+          docker build \
+            -t ${{ env.FRONTEND_IMAGE }}:${{ steps.tag.outputs.tag }} \
+            -t ${{ env.FRONTEND_IMAGE }}:latest \
+            ./frontend
+          docker push ${{ env.FRONTEND_IMAGE }} --all-tags
+
+  # ── Deploy (main → prod, develop → staging) ────────────────
+  deploy:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    needs: docker-push
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            echo "env=prod" >> "$GITHUB_OUTPUT"
+          else
+            echo "env=staging" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run database migrations
+        run: |
+          echo "TODO: Run 'alembic upgrade head' against ${{ steps.env.outputs.env }} database"
+          echo "This step should use Cloud SQL Auth Proxy or a VPC connector"
+
+      - name: Deploy backend to Cloud Run
+        run: |
+          SHA="${GITHUB_SHA::8}"
+          BRANCH="${GITHUB_REF_NAME}"
+          gcloud run deploy qlogic-backend-${{ steps.env.outputs.env }} \
+            --image ${{ env.BACKEND_IMAGE }}:${BRANCH}-${SHA} \
+            --region us-central1 \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars="ENVIRONMENT=${{ steps.env.outputs.env }}" \
+            --min-instances=1 \
+            --max-instances=10
+
+      - name: Deploy frontend to Cloud Run
+        run: |
+          SHA="${GITHUB_SHA::8}"
+          BRANCH="${GITHUB_REF_NAME}"
+          gcloud run deploy qlogic-frontend-${{ steps.env.outputs.env }} \
+            --image ${{ env.FRONTEND_IMAGE }}:${BRANCH}-${SHA} \
+            --region us-central1 \
+            --platform managed \
+            --allow-unauthenticated \
+            --min-instances=1 \
+            --max-instances=5

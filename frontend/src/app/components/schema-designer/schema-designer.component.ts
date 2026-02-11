@@ -14,6 +14,7 @@ import {
   DataType,
   FinalizedColumn,
   ProvisionResponse,
+  DataLoadResponse,
 } from '../../models/schema.models';
 
 @Component({
@@ -25,15 +26,19 @@ import {
 })
 export class SchemaDesignerComponent {
   dataTypes: DataType[] = ['STRING', 'INTEGER', 'FLOAT', 'BOOLEAN', 'DATE'];
-  step: 'upload' | 'design' | 'done' = 'upload';
+  step: 'upload' | 'design' | 'provisioned' | 'loaded' = 'upload';
   filename = '';
   rowCount = 0;
   isLoading = false;
   error = '';
 
+  /** Stash the original file so the user can load data with the same CSV. */
+  originalFile: File | null = null;
+
   projectForm: FormGroup;
   columnsForm: FormArray;
   provisionResult: ProvisionResponse | null = null;
+  loadResult: DataLoadResponse | null = null;
 
   constructor(
     private api: ApiService,
@@ -52,6 +57,7 @@ export class SchemaDesignerComponent {
     if (!input.files?.length) return;
 
     const file = input.files[0];
+    this.originalFile = file;
     this.isLoading = true;
     this.error = '';
 
@@ -113,7 +119,7 @@ export class SchemaDesignerComponent {
       .subscribe({
         next: (result) => {
           this.provisionResult = result;
-          this.step = 'done';
+          this.step = 'provisioned';
           this.isLoading = false;
         },
         error: (err) => {
@@ -123,12 +129,58 @@ export class SchemaDesignerComponent {
       });
   }
 
+  /** Load data using the original CSV (or a new file). */
+  loadData(event?: Event): void {
+    let file = this.originalFile;
+
+    if (event) {
+      const input = event.target as HTMLInputElement;
+      if (input.files?.length) {
+        file = input.files[0];
+      }
+    }
+
+    if (!file || !this.provisionResult) return;
+
+    this.isLoading = true;
+    this.error = '';
+
+    this.api.loadData(this.provisionResult.source_id, file).subscribe({
+      next: (result) => {
+        this.loadResult = result;
+        this.step = 'loaded';
+        this.isLoading = false;
+      },
+      error: (err) => {
+        this.error = err.error?.detail || 'Data loading failed.';
+        this.isLoading = false;
+      },
+    });
+  }
+
+  /** Auto-enqueue after data load. */
+  enqueueNow(): void {
+    if (!this.provisionResult) return;
+    this.isLoading = true;
+    this.api.enqueueProject(this.provisionResult.source_id).subscribe({
+      next: () => {
+        this.isLoading = false;
+      },
+      error: (err) => {
+        this.error = err.error?.detail || 'Failed to enqueue records.';
+        this.isLoading = false;
+      },
+    });
+  }
+
   reset(): void {
     this.step = 'upload';
     this.filename = '';
     this.rowCount = 0;
     this.error = '';
+    this.originalFile = null;
     this.provisionResult = null;
+    this.loadResult = null;
     this.columnsForm.clear();
     this.projectForm.reset();
   }
