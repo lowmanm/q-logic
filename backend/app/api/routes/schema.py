@@ -6,6 +6,7 @@ import structlog
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import CurrentUser, Role, get_current_user, require_role
 from app.core.config import settings
 from app.core.database import get_db
 from app.schemas.schema_inference import (
@@ -24,7 +25,10 @@ router = APIRouter(prefix="/schema", tags=["Schema"])
 
 
 @router.post("/infer", response_model=SchemaInferenceResponse)
-async def infer_csv_schema(file: UploadFile = File(...)):
+async def infer_csv_schema(
+    file: UploadFile = File(...),
+    user: CurrentUser = Depends(get_current_user),
+):
     """Upload a CSV file and get the inferred schema for each column."""
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only CSV files are accepted.")
@@ -55,6 +59,7 @@ async def infer_csv_schema(file: UploadFile = File(...)):
 async def provision_project_table(
     request: ProvisionRequest,
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(require_role(Role.ADMIN, Role.SUPERVISOR)),
 ):
     """Create a dedicated PostgreSQL table from a finalized schema."""
     if not request.columns:
@@ -87,6 +92,7 @@ async def load_csv_data(
     source_id: UUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(require_role(Role.ADMIN, Role.SUPERVISOR)),
 ):
     """Load CSV data into an already-provisioned project table.
 

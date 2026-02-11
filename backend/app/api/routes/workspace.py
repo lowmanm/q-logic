@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import CurrentUser, Role, get_current_user, require_role
 from app.core.database import get_db
 from app.schemas.workspace import (
     ProjectInfo,
@@ -37,7 +38,10 @@ router = APIRouter(prefix="/workspace", tags=["Workspace"])
 
 
 @router.get("/projects", response_model=list[ProjectInfo])
-async def get_projects(db: AsyncSession = Depends(get_db)):
+async def get_projects(
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
     """List all provisioned projects."""
     sources = await list_projects(db)
     return [
@@ -61,7 +65,11 @@ async def get_projects(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/projects/{source_id}", response_model=ProjectInfo)
-async def get_project(source_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_project(
+    source_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+):
     """Get details for a specific project."""
     source = await get_project_info(db, source_id)
     if source is None:
@@ -83,7 +91,7 @@ async def get_project(source_id: UUID, db: AsyncSession = Depends(get_db)):
     )
 
 
-# ── Raw record browsing (kept for admin use) ──────────────────
+# ── Raw record browsing (admin/supervisor only) ──────────────
 
 
 @router.get("/projects/{source_id}/records", response_model=list[TaskRecord])
@@ -92,6 +100,7 @@ async def get_records(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(require_role(Role.ADMIN, Role.SUPERVISOR)),
 ):
     """Fetch records from a project's dynamic table."""
     source = await get_project_info(db, source_id)
@@ -110,6 +119,7 @@ async def get_record(
     source_id: UUID,
     record_id: int,
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Fetch a single record by ID with the screen pop URL resolved."""
     source = await get_project_info(db, source_id)
@@ -130,6 +140,7 @@ async def get_record(
 async def enqueue_project(
     source_id: UUID,
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(require_role(Role.ADMIN, Role.SUPERVISOR)),
 ):
     """Populate the work queue from all rows in the project table.
 
@@ -147,6 +158,7 @@ async def enqueue_project(
 async def queue_stats(
     source_id: UUID,
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Get queue status counts for a project."""
     stats = await get_queue_stats(db, source_id)
@@ -165,6 +177,7 @@ async def next_task(
     source_id: UUID,
     employee_id: UUID = Query(...),
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Pull the next pending record from the queue for an employee.
 
@@ -179,7 +192,6 @@ async def next_task(
     if entry is None:
         raise HTTPException(status_code=404, detail="Queue is empty — no pending records.")
 
-    # Fetch the actual row data from the dynamic table
     row = await fetch_record_by_id(db, source, entry.record_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Record not found in table.")
@@ -200,6 +212,7 @@ async def next_task(
 async def complete_queue_item(
     queue_id: UUID,
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Mark a queue entry as completed."""
     try:
@@ -213,6 +226,7 @@ async def complete_queue_item(
 async def skip_queue_item(
     queue_id: UUID,
     db: AsyncSession = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
 ):
     """Skip a queue entry (releases assignment)."""
     try:

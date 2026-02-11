@@ -1,4 +1,4 @@
-"""Initial schema: registry, employees, queue.
+"""Initial schema: registry, employees, queue, users.
 
 Revision ID: 001_initial
 Revises:
@@ -51,6 +51,24 @@ def upgrade() -> None:
         sa.Column("is_unique_id", sa.Boolean, default=False),
     )
     op.create_index("ix_column_metadata_source_id", "column_metadata", ["source_id"])
+
+    # --- users (auth) ---
+    user_role = sa.Enum("admin", "supervisor", "agent", name="role")
+    op.create_table(
+        "users",
+        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("email", sa.String(255), unique=True, nullable=False),
+        sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("hashed_password", sa.String(255), nullable=False),
+        sa.Column("role", user_role, default="agent", nullable=False),
+        sa.Column("is_active", sa.Boolean, default=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+        ),
+    )
+    op.create_index("ix_users_role", "users", ["role"])
 
     # --- employees ---
     employee_state = sa.Enum(
@@ -168,6 +186,8 @@ def downgrade() -> None:
     op.drop_table("employee_state_logs")
     op.drop_table("employees")
     op.drop_table("column_metadata")
+    op.drop_table("users")
     op.drop_table("source_metadata")
     op.execute("DROP TYPE IF EXISTS recordstatus")
     op.execute("DROP TYPE IF EXISTS employeestate")
+    op.execute("DROP TYPE IF EXISTS role")

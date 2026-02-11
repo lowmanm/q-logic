@@ -97,8 +97,16 @@ async def get_me(
 async def seed_admin(db: AsyncSession = Depends(get_db)):
     """One-time bootstrap: create an admin user if none exists.
 
-    This endpoint is only available when no admin users exist in the database.
+    Disabled in production — use a management CLI or migration seed instead.
     """
+    from app.core.config import settings
+
+    if settings.is_production:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin seeding is disabled in production.",
+        )
+
     result = await db.execute(select(User).where(User.role == Role.ADMIN))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Admin user already exists.")
